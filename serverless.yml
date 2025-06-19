@@ -1,0 +1,75 @@
+service: grafana-investigator
+frameworkVersion: "^3.40.0"
+
+plugins:
+  - serverless-python-requirements
+
+# ──────────────────────────────────────────────────────────────────────────
+#  Custom variables
+# ──────────────────────────────────────────────────────────────────────────
+custom:
+  investigatorName: ${self:service}-${sls:stage}-investigator   # physical fn name
+  pythonRequirements:
+    dockerizePip: true                       # always Docker
+    dockerImage: public.ecr.aws/sam/build-python3.11
+    platform: linux/arm64
+    useStaticCache: false                   # ← don’t reuse old wheels
+    useDownloadCache: false                 # ← don’t reuse PyPI downloads
+    slim: true
+
+# ──────────────────────────────────────────────────────────────────────────
+provider:
+  name: aws
+  runtime: python3.11                     # keep 3.11 until CLI lists 3.12
+  region: eu-west-1
+  architecture: arm64
+
+  # Shared env
+  environment:
+    SLACK_BOT_TOKEN:      ${ssm:/slack/bot_token}
+    SLACK_SIGNING_SECRET: ${ssm:/slack/signing_secret}
+    SLACK_BOTS: GrafanaAlerts
+    PROM_URL:    http://a74d230534946499faeffd1465f5d4cb-131726251.eu-west-1.elb.amazonaws.com
+    LOKI_URL:    http://abdd7bf0ebcd743b99bde6bd1fe22bc7-1406512836.eu-west-1.elb.amazonaws.com
+    GRAFANA_URL: http://a486ffe1cc48b4e4990c853037323fa4-1608679403.eu-west-1.elb.amazonaws.com
+    GRAFANA_TOKEN: ${ssm:/grafana/token}
+    JENKINS_URL:  http://a104cf254700d48bfabf59b5a4ef9b7e-963438625.eu-west-1.elb.amazonaws.com:8080
+    JENKINS_USER: ${ssm:/jenkins/user}
+    JENKINS_PAT:  ${ssm:/jenkins/pat}
+    GITHUB_REPO:  DaiadoSRE/simulation
+    GITHUB_TOKEN: ${ssm:/github/pat}
+    TEMPO_URL: http://a09738e7de18c435c926ac84c00310e1-349628497.eu-west-1.elb.amazonaws.com
+
+  iam:
+    role:
+      statements:
+        - Effect: Allow
+          Action: lambda:InvokeFunction
+          # build ARN as a plain string → no Ref/GetAtt → no CFN loop
+          Resource:
+            - arn:aws:lambda:${aws:region}:${aws:accountId}:function:${self:custom.investigatorName}
+
+# ──────────────────────────────────────────────────────────────────────────
+functions:
+  slackEvents:
+    handler: src/app.handler
+    timeout: 10
+    events:
+      - httpApi:
+          path: /slack/events
+          method: post
+    environment:
+      # physical name resolved by Serverless at deploy-time
+      INVESTIGATOR_FN: ${self:custom.investigatorName}
+
+  investigator:
+    name: ${self:custom.investigatorName}   # fixes the exact physical name
+    handler: src/investigate.handler
+    timeout: 900                            # 15 min max
+
+# ──────────────────────────────────────────────────────────────────────────
+package:
+  patterns:
+    - src/**
+    - '!**/__pycache__/**'
+    - '!**/.venv/**'
