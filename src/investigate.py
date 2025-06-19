@@ -25,6 +25,8 @@ TEMPO_URL = os.getenv("TEMPO_URL")
 PROM_TOKEN   = os.getenv("PROM_TOKEN")
 LOKI_TOKEN   = os.getenv("LOKI_TOKEN")
 TEMPO_TOKEN  = os.getenv("TEMPO_TOKEN")
+LOKI_USER = os.getenv("LOKI_USER")
+LOKI_PASSWORD = os.getenv("LOKI_PASSWORD")
 
 slack = WebClient(token=SLACK_TOKEN)
 
@@ -216,13 +218,19 @@ def handler(event, _ctx):
     try:
         now_ns   = int(time.time() * 1_000_000_000)
         start_ns = now_ns - 30 * 60 * 1_000_000_000  # last 30 min
-        loki_headers = {"Authorization": f"Bearer {LOKI_TOKEN}"} if LOKI_TOKEN else {}
+        loki_headers = {"X-Scope-OrgID": "default"}
         query = '{namespace="default"} |= "error"'
         print(f"  Query: {query}")
         r = requests.get(
             f"{LOKI_URL}/loki/api/v1/query_range",
-            params={"query": query, "start": start_ns, "end": now_ns, "limit": 10},
+            params={
+                "query": query,
+                "start": start_ns,
+                "end": now_ns,
+                "limit": 100
+            },
             headers=loki_headers,
+            auth=(LOKI_USER, LOKI_PASSWORD),
             timeout=5,
         )
         if r.status_code != 200:
@@ -271,15 +279,28 @@ def handler(event, _ctx):
     # Test Grafana - get the alert rule given its title (service + namespace), ensuring token is used
     print("\n-> Testing Grafana API...")
     try:
-        grafana_headers = {"Authorization": f"Bearer {GRAFANA_TOKEN}"} if GRAFANA_TOKEN else {}
+        grafana_headers = {}
+        if GRAFANA_TOKEN:
+            grafana_headers = {"Authorization": f"Bearer {GRAFANA_TOKEN}"}
+            print(f"  Using auth token: {GRAFANA_TOKEN[:5]}...")
+        print(f"  Headers: {grafana_headers}")
         # Retrieve all alert rules then just grab the first one as a sanity check
         r = requests.get(f"{GRAFANA_URL}/api/v1/provisioning/alert-rules", headers=grafana_headers, timeout=5)
+        print(f"  Response status: {r.status_code}")
+        print(f"  Response headers: {dict(r.headers)}")
         if r.status_code != 200:
             errors.append(f"Grafana: HTTP {r.status_code}")
             print(f"✗ Grafana error: HTTP {r.status_code}")
+            print(f"  Response body: {r.text[:500]}")  # Print first 500 chars of error response
         else:
             js = r.json()
-            rules = js.get("data", [])
+            print(f"  Response JSON: {js}")  # Debug the actual response structure
+            # Handle both possible response formats
+            rules = []
+            if isinstance(js, dict):
+                rules = js.get("data", [])
+            elif isinstance(js, list):
+                rules = js
             print(f"✓ Grafana: Found {len(rules)} alert rules")
     except Exception as e:
         errors.append(f"Grafana: {e}")

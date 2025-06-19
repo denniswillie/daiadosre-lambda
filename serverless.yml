@@ -39,6 +39,8 @@ provider:
     GITHUB_REPO:  DaiadoSRE/simulation
     GITHUB_TOKEN: ${ssm:/github/pat}
     TEMPO_URL: http://a09738e7de18c435c926ac84c00310e1-349628497.eu-west-1.elb.amazonaws.com
+    LOKI_USER: loki
+    LOKI_PASSWORD: password
 
   iam:
     role:
