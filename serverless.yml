@@ -41,6 +41,9 @@ provider:
     TEMPO_URL: http://a09738e7de18c435c926ac84c00310e1-349628497.eu-west-1.elb.amazonaws.com
     LOKI_USER: loki
     LOKI_PASSWORD: password
+    ANTHROPIC_API_KEY: ${ssm:/anthropic/api_key}
+    SUPABASE_KEY: ${ssm:/supabase/api_key}
+    SUPABASE_URL: https://acyudbnndfprtirnwpqi.supabase.co
 
   iam:
     role:

@@ -1,6 +1,6 @@
 slack_sdk==3.28.0
 requests==2.32.2
-langchain==0.1.17
-langchain-openai==0.1.3
 openai==1.25.0
 boto3==1.34.118
+anthropic==0.54.0
+supabase==2.16.0

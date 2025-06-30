@@ -60,7 +60,7 @@ def handler(event, _ctx):
         lambda_.invoke(
             FunctionName=INVESTIGATOR_FN,
             InvocationType="Event",
-            Payload=json.dumps(ev).encode(),
+            Payload=json.dumps(ev),
         )
 
     return {"statusCode": 200, "body": "OK"}
